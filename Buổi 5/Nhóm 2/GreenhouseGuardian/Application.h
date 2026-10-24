@@ -21,7 +21,7 @@ private:
   static constexpr int WET_THRESHOLD = 2000;
   static constexpr int SOIL_DRY_CAUTIOUS = 55;
   static constexpr int SOIL_DRY_EXTREME = 70;
-  static constexpr int GAS_BASELINE = 650;
+  static constexpr int GAS_BASELINE = 200;
   static constexpr int GAS_DIFFERENCE_CAUTIOUS = 150;
   static constexpr int GAS_DIFFERENCE_EXTREME = 400;
 

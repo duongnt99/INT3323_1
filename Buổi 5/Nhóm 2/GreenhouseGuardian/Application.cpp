@@ -1,4 +1,4 @@
-#include "Components.h"
+#include "Application.h"
 #include "Arduino.h"
 #include "DHT.h"
 
@@ -102,7 +102,7 @@ void Application::readSensors()
     gasDigital
   );
 
-  int gasDifference = abs(gasAnalog - GAS_BASELINE);
+  int gasDifference = gasAnalog - GAS_BASELINE;
   if(gasDifference > GAS_DIFFERENCE_EXTREME)
   {
     Serial.println("MQ2 ALERT");

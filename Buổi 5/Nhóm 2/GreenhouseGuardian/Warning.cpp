@@ -1,5 +1,5 @@
 #include "SystemStates.h"
-#include "Components.h"
+#include "Application.h"
 #include "Arduino.h"
 
 Watch::Watch() : Warning(500, 1000, Application::YELLOW_LED, false, true)

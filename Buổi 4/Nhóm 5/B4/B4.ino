@@ -1,85 +1,77 @@
-#include <DHT.h>
+// Bai 3: Bang chuyen dong goi tu dong
+const int PIN_START     = 18;
+const int PIN_LED_RED   = 19;
+const int PIN_LED_YEL   = 22;
+const int PIN_LED_GREEN = 21;
+const int PIN_BUZZER    = 4;
+const int PIN_ENA       = 25;
+const int PIN_IN1       = 26;
+const int PIN_IN2       = 27;
 
-#define DHTPIN 4
-#define DHTTYPE DHT11
-#define SOIL_AO 34
+// Thoi gian bang chuyen van hanh (tuy chon 3000, 5000 hoac 10000 ms)
+const unsigned long CONVEYOR_RUNTIME = 5000; 
 
-#define LED_GREEN  18
-#define LED_YELLOW 19
-#define LED_RED    21
-#define BUZZER     22
+bool isBusy = false;
 
-const int ADC_WET = 1200;
-const int ADC_DRY = 3800;
-
-DHT dht(DHTPIN, DHTTYPE);
-
-void setOutputs(bool g, bool y, bool r, bool buz) {
-  digitalWrite(LED_GREEN, g ? HIGH : LOW);
-  digitalWrite(LED_YELLOW, y ? HIGH : LOW);
-  digitalWrite(LED_RED, r ? HIGH : LOW);
-  digitalWrite(BUZZER, buz ? HIGH : LOW);
-}
-
-float calculateDryness(int adcVal) {
-  float dryness = (float)(adcVal - ADC_WET) * 100.0 / (ADC_DRY - ADC_WET);
-  return constrain(dryness, 0.0, 100.0);
+void setupSystemReady() {
+  analogWrite(PIN_ENA, 0);
+  digitalWrite(PIN_LED_RED, HIGH);
+  digitalWrite(PIN_LED_YEL, LOW);
+  digitalWrite(PIN_LED_GREEN, LOW);
+  digitalWrite(PIN_BUZZER, LOW);
+  isBusy = false;
 }
 
 void setup() {
-  Serial.begin(115200);
-  dht.begin();
+  pinMode(PIN_START, INPUT_PULLUP);
+  pinMode(PIN_LED_RED, OUTPUT);
+  pinMode(PIN_LED_YEL, OUTPUT);
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_ENA, OUTPUT);
+  pinMode(PIN_IN1, OUTPUT);
+  pinMode(PIN_IN2, OUTPUT);
 
-  pinMode(SOIL_AO, INPUT);
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_YELLOW, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
+  digitalWrite(PIN_IN1, HIGH);
+  digitalWrite(PIN_IN2, LOW);
 
-  setOutputs(false, false, false, false);
-  Serial.println("--- Bài 4: Plant Doctor ---");
+  setupSystemReady();
 }
 
 void loop() {
-  delay(2000);
+  // Chi tiep nhan nut nhan neu he thong dang ranh (khong ban chu trinh)
+  if (!isBusy && digitalRead(PIN_START) == LOW) {
+    delay(50); // Loc nhieu co hoc
+    if (digitalRead(PIN_START) == LOW) {
+      isBusy = true;
 
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  int soilADC = analogRead(SOIL_AO);
-  float dryness = calculateDryness(soilADC);
+      // 1. LED do tat, LED vang sang va dem nguoc 3 tieng (moi tieng cach nhau 1s)
+      digitalWrite(PIN_LED_RED, LOW);
+      digitalWrite(PIN_LED_YEL, HIGH);
+      for (int i = 0; i < 3; i++) {
+        digitalWrite(PIN_BUZZER, HIGH);
+        delay(150);
+        digitalWrite(PIN_BUZZER, LOW);
+        delay(850);
+      }
+      digitalWrite(PIN_LED_YEL, LOW);
 
-  // Khi DHT11 đọc lỗi, thông báo lỗi thay vì kết luận bình thường
-  if (isnan(h) || isnan(t)) {
-    Serial.println("[LOI] DHT11 SENSOR ERROR! Khong the danh gia chinh xac tinh trang cay.");
-    setOutputs(false, false, false, false);
-    return;
-  }
+      // 2. LED xanh sang, chay dong co trong 5 giay
+      digitalWrite(PIN_LED_GREEN, HIGH);
+      analogWrite(PIN_ENA, 255);
+      delay(CONVEYOR_RUNTIME);
 
-  Serial.print("Nhiet do: ");
-  Serial.print(t, 1);
-  Serial.print("°C | Do am KK: ");
-  Serial.print(h, 1);
-  Serial.print("% | Do kho dat: ");
-  Serial.print(dryness, 1);
-  Serial.print("% -> ");
+      // 3. Dung dong co, LED xanh nhap nhay 3 lan bao hoan thanh
+      analogWrite(PIN_ENA, 0);
+      for (int i = 0; i < 3; i++) {
+        digitalWrite(PIN_LED_GREEN, LOW);
+        delay(250);
+        digitalWrite(PIN_LED_GREEN, HIGH);
+        delay(250);
+      }
 
-  // 1. Kiểm tra URGENT (Ưu tiên cao nhất)
-  if (dryness >= 70.0 && t >= 30.0) {
-    Serial.println("Trang thai: URGENT | Ly do: Dat rat kho (>=70%) VA Nhiet do cao (>=30°C)");
-    setOutputs(false, false, true, true); // LED đỏ + Buzzer
-  }
-  // 2. Kiểm tra NEEDS ATTENTION
-  else if (dryness >= 55.0 || t >= 30.0 || h < 40.0) {
-    Serial.print("Trang thai: NEEDS ATTENTION | Ly do: ");
-    if (dryness >= 55.0) Serial.print("[Dat bat dau kho >=55%] ");
-    if (t >= 30.0)       Serial.print("[Nhiet do cao >=30°C] ");
-    if (h < 40.0)        Serial.print("[Do am khong khi thap <40%] ");
-    Serial.println();
-    setOutputs(false, true, false, false); // LED vàng
-  }
-  // 3. Trạng thái NORMAL
-  else {
-    Serial.println("Trang thai: NORMAL | Moi chi so deu on dinh.");
-    setOutputs(true, false, false, false); // LED xanh
+      // 4. Quay lai trang thai ban dau
+      setupSystemReady();
+    }
   }
 }

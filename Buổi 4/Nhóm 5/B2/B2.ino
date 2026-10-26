@@ -1,68 +1,64 @@
-#define SOIL_AO 34
-#define SOIL_DO 25
+// B2: Bat/Tat quat luan phien bang 1 nut nhan
+const int PIN_BUTTON    = 18;
+const int PIN_LED_RED   = 19;
+const int PIN_LED_GREEN = 21;
+const int PIN_ENA       = 25;
+const int PIN_IN1       = 26;
+const int PIN_IN2       = 27;
 
-#define LED_GREEN  18
-#define LED_YELLOW 19
-#define LED_RED    21
-#define BUZZER     22
+bool isFanOn = false;
+int lastButtonReading = HIGH;
+int buttonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
 
-// Giá trị hiệu chuẩn thực tế (Thay đổi sau khi bạn tự đo trên Serial Monitor)
-// Thông thường cảm biến điện trở: Nhúng nước (rất ẩm) ADC thấp, để khô ngoài không khí ADC cao
-const int ADC_WET = 1200; // Giá trị ADC khi đất rất ẩm (0% khô)
-const int ADC_DRY = 3800; // Giá trị ADC khi đất khô hoàn toàn (100% khô)
-
-void setOutputs(bool g, bool y, bool r, bool buz) {
-  digitalWrite(LED_GREEN, g ? HIGH : LOW);
-  digitalWrite(LED_YELLOW, y ? HIGH : LOW);
-  digitalWrite(LED_RED, r ? HIGH : LOW);
-  digitalWrite(BUZZER, buz ? HIGH : LOW);
-}
-
-float calculateDryness(int adcVal) {
-  float dryness = (float)(adcVal - ADC_WET) * 100.0 / (ADC_DRY - ADC_WET);
-  return constrain(dryness, 0.0, 100.0);
+void setFanState(bool state) {
+  if (state) {
+    digitalWrite(PIN_LED_RED, LOW);
+    digitalWrite(PIN_LED_GREEN, HIGH);
+    analogWrite(PIN_ENA, 255);
+    Serial.println("Trang thai quat: ON");
+  } else {
+    digitalWrite(PIN_LED_RED, HIGH);
+    digitalWrite(PIN_LED_GREEN, LOW);
+    analogWrite(PIN_ENA, 0);
+    Serial.println("Trang thai quat: OFF");
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-  
-  pinMode(SOIL_AO, INPUT);
-  pinMode(SOIL_DO, INPUT);
-  
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_YELLOW, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
 
-  setOutputs(false, false, false, false);
-  Serial.println("--- Bài 2: Smart Plant Pot ---");
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_LED_RED, OUTPUT);
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_ENA, OUTPUT);
+  pinMode(PIN_IN1, OUTPUT);
+  pinMode(PIN_IN2, OUTPUT);
+
+  // Thiet lap chieu quay
+  digitalWrite(PIN_IN1, HIGH);
+  digitalWrite(PIN_IN2, LOW);
+
+  // Ban dau: quat dung, LED do sang
+  setFanState(false);
 }
 
 void loop() {
-  int aoVal = analogRead(SOIL_AO);
-  int doVal = digitalRead(SOIL_DO);
-  float dryness = calculateDryness(aoVal);
+  int reading = digitalRead(PIN_BUTTON);
 
-  Serial.print("ADC (AO): ");
-  Serial.print(aoVal);
-  Serial.print(" | DO: ");
-  Serial.print(doVal);
-  Serial.print(" | Do kho: ");
-  Serial.print(dryness, 1);
-  Serial.print("% -> Trang thai: ");
-
-  if (dryness < 35.0) {
-    Serial.println("WET");
-    setOutputs(true, false, false, false); // LED xanh sáng
-  } 
-  else if (dryness < 70.0) {
-    Serial.println("MODERATE");
-    setOutputs(false, true, false, false); // LED vàng sáng
-  } 
-  else {
-    Serial.println("DRY");
-    setOutputs(false, false, true, true);  // LED đỏ sáng + Buzzer kêu
+  if (reading != lastButtonReading) {
+    lastDebounceTime = millis();
   }
 
-  delay(1000); // Cập nhật mỗi giây
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // Phat hien khi nut vua duoc nhan xuong (canh xuong)
+    if (reading == LOW && buttonState == HIGH) {
+      isFanOn = !isFanOn;
+      setFanState(isFanOn);
+    }
+    buttonState = reading;
+  }
+
+  lastButtonReading = reading;
 }

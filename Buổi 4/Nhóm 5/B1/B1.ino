@@ -1,67 +1,32 @@
-#include <DHT.h>
-
-#define DHTPIN 4
-#define DHTTYPE DHT11
-
-#define LED_GREEN  18
-#define LED_YELLOW 19
-#define LED_RED    21
-
-DHT dht(DHTPIN, DHTTYPE);
-
-void setLEDs(bool g, bool y, bool r) {
-  digitalWrite(LED_GREEN, g ? HIGH : LOW);
-  digitalWrite(LED_YELLOW, y ? HIGH : LOW);
-  digitalWrite(LED_RED, r ? HIGH : LOW);
-}
+// B1: Dieu khien chu trinh PWM dong co DC
+const int PIN_ENA = 25; // Chan PWM dieu khien toc do
+const int PIN_IN1 = 26; // Chan huong 1
+const int PIN_IN2 = 27; // Chan huong 2
 
 void setup() {
-  Serial.begin(115200);
-  dht.begin();
+  pinMode(PIN_ENA, OUTPUT);
+  pinMode(PIN_IN1, OUTPUT);
+  pinMode(PIN_IN2, OUTPUT);
 
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_YELLOW, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  
-  setLEDs(false, false, false);
-  Serial.println("--- Bài 1: Mini Climate Station ---");
+  // Dong co quay co dinh 1 chieu
+  digitalWrite(PIN_IN1, HIGH);
+  digitalWrite(PIN_IN2, LOW);
 }
 
 void loop() {
-  delay(2000); // Đọc sau mỗi 2 giây
+  // 1. Chay voi PWM = 255 trong 4 giay
+  analogWrite(PIN_ENA, 255);
+  delay(4000);
 
-  float h = dht.readHumidity();
-  float t = dht.readTemperature(); // Đọc độ C
+  // 2. Giam PWM xuong 220 trong 4 giay
+  analogWrite(PIN_ENA, 220);
+  delay(4000);
 
-  // Kiểm tra lỗi cảm biến
-  if (isnan(h) || isnan(t)) {
-    Serial.println("SENSOR ERROR");
-    setLEDs(false, false, false); // Tắt cả 3 LED
-    return;
-  }
+  // 3. Giam PWM xuong 180 trong 4 giay
+  analogWrite(PIN_ENA, 180);
+  delay(4000);
 
-  // Tính Heat Index (false = tính theo độ C)
-  float hic = dht.computeHeatIndex(t, h, false);
-
-  Serial.print("Nhiet do: ");
-  Serial.print(t);
-  Serial.print(" °C | Do am: ");
-  Serial.print(h);
-  Serial.print(" % | Heat Index: ");
-  Serial.print(hic);
-  Serial.print(" °C -> Trang thai: ");
-
-  // Phân loại trạng thái môi trường (mỗi thời điểm chỉ 1 LED sáng)
-  if (t >= 31.0) {
-    Serial.println("HOT");
-    setLEDs(false, false, true); // LED đỏ sáng
-  } 
-  else if (t < 24.0 || h < 40.0 || h > 75.0) {
-    Serial.println("CAUTION");
-    setLEDs(false, true, false); // LED vàng sáng
-  } 
-  else {
-    Serial.println("COMFORTABLE");
-    setLEDs(true, false, false); // LED xanh sáng
-  }
+  // 4. Dung dong co trong 3 giay
+  analogWrite(PIN_ENA, 0);
+  delay(3000);
 }

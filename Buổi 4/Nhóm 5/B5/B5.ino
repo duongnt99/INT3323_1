@@ -1,195 +1,123 @@
-#include <DHT.h>
+// Bai 4: He thong dung khan cap gia lap (FSM + millis)
+const int PIN_BUTTON    = 18;
+const int PIN_LED_RED   = 19;
+const int PIN_LED_YEL   = 22;
+const int PIN_LED_GREEN = 21;
+const int PIN_BUZZER    = 4;
+const int PIN_ENA       = 25;
+const int PIN_IN1       = 26;
+const int PIN_IN2       = 27;
 
-#define DHTPIN 4
-#define DHTTYPE DHT11
-#define SOIL_AO 34
-#define MQ2_AO  35
-#define MQ2_DO  26
-
-#define LED_GREEN  18
-#define LED_YELLOW 19
-#define LED_RED    21
-#define BUZZER     22
-
-// Hằng số hiệu chuẩn độ ẩm đất & ngưỡng MQ2
-const int ADC_WET = 1200;
-const int ADC_DRY = 3800;
-const int MQ2_WATCH_DELTA = 150; // Ngưỡng MQ2 cần chú ý (WATCH)
-const int MQ2_ALERT_DELTA = 400; // Ngưỡng MQ2 báo động (MQ2 ALERT)
-
-DHT dht(DHTPIN, DHTTYPE);
-
-// Các trạng thái hoạt động của hệ thống
 enum SystemState {
-  STATE_NORMAL,
-  STATE_WATCH,
-  STATE_HOT_DRY,
-  STATE_MQ2_ALERT,
-  STATE_SENSOR_ERROR
+  STATE_RUNNING,    // Motor chay, LED xanh sang
+  STATE_EMERGENCY,  // Dung khang cap, LED do + buzzer chop canh bao
+  STATE_RESTARTING  // Chuan bi khoi dong lai (LED vang nhap nhay 3s)
 };
 
-SystemState currentState = STATE_NORMAL;
-int mq2Baseline = 0;
+SystemState currentState = STATE_RUNNING;
 
-// Biến thời gian cho millis()
-unsigned long lastSensorReadTime = 0;
-const unsigned long SENSOR_INTERVAL = 2000; // Lấy mẫu mỗi 2 giây
+// Debounce button
+int lastButtonReading = HIGH;
+int buttonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
 
+// Timer millis
+unsigned long stateStartTime = 0;
 unsigned long lastBlinkTime = 0;
-bool toggleState = false;
-
-float calculateDryness(int adcVal) {
-  float dryness = (float)(adcVal - ADC_WET) * 100.0 / (ADC_DRY - ADC_WET);
-  return constrain(dryness, 0.0, 100.0);
-}
+bool blinkFlag = false;
 
 void setup() {
-  Serial.begin(115200);
-  dht.begin();
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_LED_RED, OUTPUT);
+  pinMode(PIN_LED_YEL, OUTPUT);
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_ENA, OUTPUT);
+  pinMode(PIN_IN1, OUTPUT);
+  pinMode(PIN_IN2, OUTPUT);
 
-  pinMode(SOIL_AO, INPUT);
-  pinMode(MQ2_AO, INPUT);
-  pinMode(MQ2_DO, INPUT);
+  digitalWrite(PIN_IN1, HIGH);
+  digitalWrite(PIN_IN2, LOW);
 
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_YELLOW, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
-
-  Serial.println("--- Bài 5: Greenhouse Guardian ---");
-  Serial.println("Dang khoi dong va lay baseline cho MQ2 (5 giay)...");
-  
-  // Chỉ dùng delay trong setup() để lấy mẫu baseline ban đầu
-  delay(3000);
-  long sum = 0;
-  for (int i = 0; i < 20; i++) {
-    sum += analogRead(MQ2_AO);
-    delay(100);
-  }
-  mq2Baseline = sum / 20;
-  Serial.print("MQ2 Baseline: ");
-  Serial.println(mq2Baseline);
-  Serial.println("He thong bat dau giam sat (Non-blocking millis)...");
-}
-
-// Hàm đọc cảm biến và cập nhật trạng thái (chạy mỗi 2000ms)
-void readSensorsAndEvaluate() {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  int soilADC = analogRead(SOIL_AO);
-  float dryness = calculateDryness(soilADC);
-  int mq2AO = analogRead(MQ2_AO);
-  int mq2DO = digitalRead(MQ2_DO);
-  int mq2Delta = mq2AO - mq2Baseline;
-
-  bool dhtError = (isnan(h) || isnan(t));
-
-  // In thông số lên Serial Monitor
-  if (dhtError) {
-    Serial.print("SENSOR ERROR (DHT11) | ");
-  } else {
-    Serial.print("Temp: "); Serial.print(t, 1); Serial.print("°C | ");
-    Serial.print("Hum: ");  Serial.print(h, 1); Serial.print("% | ");
-  }
-  Serial.print("Soil Dryness: "); Serial.print(dryness, 1); Serial.print("% | ");
-  Serial.print("MQ2 AO: "); Serial.print(mq2AO);
-  Serial.print(" (Delta: "); Serial.print(mq2Delta); Serial.print(") | ");
-  Serial.print("MQ2 DO: "); Serial.print(mq2DO);
-  Serial.print(" => Priority State: ");
-
-  // Xét thứ tự ưu tiên: MQ2 ALERT -> HOT & DRY -> WATCH -> NORMAL
-  // Lưu ý: Nếu DHT11 lỗi, vẫn kiểm tra MQ2 ALERT hoặc độ khô đất trước, tuyệt đối không vào NORMAL
-  if (mq2Delta >= MQ2_ALERT_DELTA) {
-    currentState = STATE_MQ2_ALERT;
-    Serial.println("MQ2 ALERT");
-  } 
-  else if (!dhtError && (t >= 30.0 && dryness >= 70.0)) {
-    currentState = STATE_HOT_DRY;
-    Serial.println("HOT & DRY");
-  } 
-  else if (dhtError) {
-    currentState = STATE_SENSOR_ERROR;
-    Serial.println("SENSOR ERROR (Khong hien thi NORMAL)");
-  } 
-  else if (dryness >= 55.0 || t >= 30.0 || t < 24.0 || h < 40.0 || h > 75.0 || mq2Delta >= MQ2_WATCH_DELTA) {
-    currentState = STATE_WATCH;
-    Serial.println("WATCH");
-  } 
-  else {
-    currentState = STATE_NORMAL;
-    Serial.println("NORMAL");
-  }
-}
-
-// Hàm điều khiển LED và Buzzer đồng thời bằng millis()
-void handleOutputsNonBlocking(unsigned long currentMillis) {
-  switch (currentState) {
-    case STATE_NORMAL:
-      // LED xanh sáng cố định
-      digitalWrite(LED_GREEN, HIGH);
-      digitalWrite(LED_YELLOW, LOW);
-      digitalWrite(LED_RED, LOW);
-      digitalWrite(BUZZER, LOW);
-      break;
-
-    case STATE_WATCH:
-      // LED vàng nhấp nháy (chu kỳ 500ms)
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_RED, LOW);
-      digitalWrite(BUZZER, LOW);
-      if (currentMillis - lastBlinkTime >= 500) {
-        lastBlinkTime = currentMillis;
-        toggleState = !toggleState;
-        digitalWrite(LED_YELLOW, toggleState ? HIGH : LOW);
-      }
-      break;
-
-    case STATE_HOT_DRY:
-      // LED đỏ sáng cố định, Buzzer phát tiếng ngắn định kỳ (kêu 150ms, nghỉ 1350ms)
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_YELLOW, LOW);
-      digitalWrite(LED_RED, HIGH);
-      {
-        unsigned long cycleTime = currentMillis % 1500;
-        digitalWrite(BUZZER, (cycleTime < 150) ? HIGH : LOW);
-      }
-      break;
-
-    case STATE_MQ2_ALERT:
-      // LED đỏ nhấp nháy nhanh và Buzzer phát tiếng nhanh hơn (chu kỳ 150ms đảo trạng thái)
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_YELLOW, LOW);
-      if (currentMillis - lastBlinkTime >= 150) {
-        lastBlinkTime = currentMillis;
-        toggleState = !toggleState;
-        digitalWrite(LED_RED, toggleState ? HIGH : LOW);
-        digitalWrite(BUZZER, toggleState ? HIGH : LOW);
-      }
-      break;
-
-    case STATE_SENSOR_ERROR:
-      // Khi lỗi DHT11: Tắt LED xanh (không hiển thị NORMAL), nháy chậm LED vàng cảnh báo lỗi phần cứng
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_RED, LOW);
-      digitalWrite(BUZZER, LOW);
-      if (currentMillis - lastBlinkTime >= 1000) {
-        lastBlinkTime = currentMillis;
-        toggleState = !toggleState;
-        digitalWrite(LED_YELLOW, toggleState ? HIGH : LOW);
-      }
-      break;
-  }
+  // Khoi dong ban dau: Motor chay, LED xanh sang
+  digitalWrite(PIN_LED_GREEN, HIGH);
+  digitalWrite(PIN_LED_RED, LOW);
+  digitalWrite(PIN_LED_YEL, LOW);
+  digitalWrite(PIN_BUZZER, LOW);
+  analogWrite(PIN_ENA, 255);
 }
 
 void loop() {
   unsigned long currentMillis = millis();
 
-  // 1. Lấy mẫu cảm biến định kỳ bằng millis()
-  if (currentMillis - lastSensorReadTime >= SENSOR_INTERVAL) {
-    lastSensorReadTime = currentMillis;
-    readSensorsAndEvaluate();
+  // 1. Doc nut nhan chong doi phím
+  int reading = digitalRead(PIN_BUTTON);
+  bool buttonPressed = false;
+
+  if (reading != lastButtonReading) {
+    lastDebounceTime = currentMillis;
   }
 
-  // 2. Điều khiển LED và Buzzer liên tục không dùng delay()
-  handleOutputsNonBlocking(currentMillis);
+  if ((currentMillis - lastDebounceTime) > debounceDelay) {
+    if (reading == LOW && buttonState == HIGH) {
+      buttonPressed = true;
+    }
+    buttonState = reading;
+  }
+  lastButtonReading = reading;
+
+  // 2. May trang thai
+  switch (currentState) {
+    case STATE_RUNNING:
+      if (buttonPressed) {
+        // Dung khan cap
+        analogWrite(PIN_ENA, 0);
+        digitalWrite(PIN_LED_GREEN, LOW);
+        currentState = STATE_EMERGENCY;
+      }
+      break;
+
+    case STATE_EMERGENCY:
+      // LED do chop tat va buzzer canh bao dinh ky moi 400ms
+      if (currentMillis - lastBlinkTime >= 400) {
+        lastBlinkTime = currentMillis;
+        blinkFlag = !blinkFlag;
+        digitalWrite(PIN_LED_RED, blinkFlag);
+        digitalWrite(PIN_BUZZER, blinkFlag);
+      }
+
+      if (buttonPressed) {
+        // Chuyen sang giai doan chuan bi khoi dong lai trong 3s
+        digitalWrite(PIN_LED_RED, LOW);
+        digitalWrite(PIN_BUZZER, LOW);
+        stateStartTime = currentMillis;
+        currentState = STATE_RESTARTING;
+      }
+      break;
+
+    case STATE_RESTARTING:
+      // Trong 3s, neu nhan nut -> huy va quay lai trang thai dung khan cap
+      if (buttonPressed) {
+        digitalWrite(PIN_LED_YEL, LOW);
+        currentState = STATE_EMERGENCY;
+        break;
+      }
+
+      // Nhap nhay LED vang moi 200ms
+      if (currentMillis - lastBlinkTime >= 200) {
+        lastBlinkTime = currentMillis;
+        blinkFlag = !blinkFlag;
+        digitalWrite(PIN_LED_YEL, blinkFlag);
+      }
+
+      // Het 3 giay -> Tu dong khoi dong lai motor
+      if (currentMillis - stateStartTime >= 3000) {
+        digitalWrite(PIN_LED_YEL, LOW);
+        digitalWrite(PIN_LED_GREEN, HIGH);
+        analogWrite(PIN_ENA, 255);
+        currentState = STATE_RUNNING;
+      }
+      break;
+  }
 }

@@ -1,17 +1,12 @@
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
 from .utils import MethodAssessment
 from .imputation import impute, impute_extenstion
 
 import pandas as pd
 
 def rfr_score(method_name, X_train, X_test, y_train, y_test) -> MethodAssessment:
-    rfr = RandomForestRegressor(n_estimators=1000, criterion='squared_error', random_state=1, n_jobs=-1)
+    rfr = RandomForestRegressor(n_estimators=1000, criterion='squared_error', random_state=32, n_jobs=-1)
     
     print("Training...")
     rfr.fit(X_train, y_train)

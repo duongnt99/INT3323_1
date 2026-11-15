@@ -1,7 +1,6 @@
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from .utils import MethodAssessment
 from .imputation import impute, impute_extenstion
@@ -26,7 +25,7 @@ def rfr_pipeline_score(method_name, X_train, X_test, y_train, y_test) -> MethodA
 
 
 def rfr_pipeline_impute(X_train, X_test, y_train, y_test) -> MethodAssessment:
-    X_train, X_test = impute_extenstion(X_train, X_test)
+    X_train, X_test = impute(X_train, X_test)
     return rfr_pipeline_score("Random Forest Regressor (Imputation)", X_train, X_test, y_train, y_test)
 
 

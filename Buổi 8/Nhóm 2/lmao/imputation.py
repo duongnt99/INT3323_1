@@ -1,7 +1,6 @@
 from sklearn.impute import SimpleImputer
 import pandas as pd
     
-    
 def impute_extenstion(X_train, X_test):
     X_train_plus = X_train.copy()
     X_test_plus = X_test.copy()

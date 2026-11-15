@@ -27,9 +27,9 @@ def rfr_pipeline_score(method_name, X_train, X_test, y_train, y_test) -> MethodA
 
 def rfr_pipeline_impute(X_train, X_test, y_train, y_test) -> MethodAssessment:
     X_train, X_test = impute(X_train, X_test)
-    return rfr_pipeline_score("Random Forest Regressor (Imputation)", X_train, X_test, y_train, y_test)
+    return rfr_pipeline_score("Random Forest Regressor Pipeline (Imputation)", X_train, X_test, y_train, y_test)
 
 
 def rfr_pipeline_impute_extension(X_train, X_test, y_train, y_test) -> MethodAssessment:
     X_train, X_test = impute_extenstion(X_train, X_test)
-    return rfr_pipeline_score("Random Forest Regressor (Imputation Extension)", X_train, X_test, y_train, y_test)
+    return rfr_pipeline_score("Random Forest Regressor Pipeline (Imputation Extension)", X_train, X_test, y_train, y_test)
